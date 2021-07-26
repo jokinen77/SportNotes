@@ -8,6 +8,8 @@ package com.sportnotes.utils.dao;
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
+import com.j256.ormlite.stmt.PreparedQuery;
+import com.j256.ormlite.stmt.QueryBuilder;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
 import com.sportnotes.domain.Note;
@@ -28,6 +30,42 @@ import org.slf4j.LoggerFactory;
 public class DaoUtils {
     
     private static final Logger LOG = LoggerFactory.getLogger(DaoUtils.class);
+    
+    public static Player getPlayerByToken(String token) {
+        try (ConnectionSource cs = getConnectionSource()) {
+            Dao<Player, String> dao = DaoManager.createDao(cs, Player.class);
+            QueryBuilder<Player, String> queryBuilder = dao.queryBuilder();
+            queryBuilder.where().eq("token", token);
+            PreparedQuery<Player> preparedQuery = queryBuilder.prepare();
+            Player player = dao.queryForFirst(preparedQuery);
+
+            Dao<Team, String> teamDao = DaoManager.createDao(cs, Team.class);
+            teamDao.refresh(player.getTeam());
+
+            return player;
+        } catch (SQLException | IOException ex) {
+            LOG.error("Cannot get player by token!", ex);
+        }
+        return null;
+    }
+
+    public static void createNote(Note note) {
+        try (ConnectionSource cs = getConnectionSource()) {
+            Dao<Note, Long> dao = DaoManager.createDao(cs, Note.class);
+            dao.create(note);
+        } catch (SQLException | IOException ex) {
+            LOG.error("Cannot create note!", ex);
+        }
+    }
+
+    public static void deleteNote(Long id) {
+        try (ConnectionSource cs = getConnectionSource()) {
+            Dao<Note, Long> dao = DaoManager.createDao(cs, Note.class);
+            dao.deleteById(id);
+        } catch (SQLException | IOException ex) {
+            LOG.error("Cannot create note!", ex);
+        }
+    }
     
     public static ConnectionSource getConnectionSource() throws SQLException {
         String dbUrl = System.getenv("JDBC_DATABASE_URL");

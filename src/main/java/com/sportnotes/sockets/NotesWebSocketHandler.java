@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import org.eclipse.jetty.websocket.api.CloseException;
 import org.eclipse.jetty.websocket.api.Session;
@@ -69,7 +68,7 @@ public class NotesWebSocketHandler {
         String action = messageMap.get("action").toString().toUpperCase();
         if (token == null || action == null) return;
         
-        Player player = getPlayerByToken(token);
+        Player player = DaoUtils.getPlayerByToken(token);
         if (player == null) return;
         
         Team team = player.getTeam();
@@ -91,9 +90,14 @@ public class NotesWebSocketHandler {
                 Long maxOrderno = team.getNotes().stream().mapToLong(o -> o.getOrderno()).max().orElse(1);
                 String content = messageMap.get("content").toString();
                 Note note = new Note(maxOrderno + 1, content, player);
-                createNote(note);
-                broadcastMessageToTeam(team.getName(), Map.of("action", "NOTE", "note", note));
-                break; 
+                DaoUtils.createNote(note);
+                broadcastMessageToTeam(team.getName(), Map.of("action", "ADD_NOTE", "note", note));
+                break;
+            case "REMOVE_NOTE":
+                Long id = ((Double) Double.parseDouble(messageMap.get("id").toString())).longValue();
+                DaoUtils.deleteNote(id);
+                broadcastMessageToTeam(team.getName(), Map.of("action", "REMOVE_NOTE", "id", id));
+                break;
             default:
                 LOG.warn("Cannot handle message: " + message);
         }
@@ -119,33 +123,6 @@ public class NotesWebSocketHandler {
                     LOG.error("Failed to send message!", e);
                 }
             }
-        }
-    }
-
-    private static Player getPlayerByToken(String token) {
-        try (ConnectionSource cs = DaoUtils.getConnectionSource()) {
-            Dao<Player, String> dao = DaoManager.createDao(cs, Player.class);
-            QueryBuilder<Player, String> queryBuilder = dao.queryBuilder();
-            queryBuilder.where().eq("token", token);
-            PreparedQuery<Player> preparedQuery = queryBuilder.prepare();
-            Player player = dao.queryForFirst(preparedQuery);
-            
-            Dao<Team, String> teamDao = DaoManager.createDao(cs, Team.class);
-            teamDao.refresh(player.getTeam());
-            
-            return player;
-        } catch (SQLException|IOException ex) {
-            LOG.error("Cannot get player by token!", ex);
-        }
-        return null;
-    }
-    
-    private static void createNote(Note note) {
-        try (ConnectionSource cs = DaoUtils.getConnectionSource()) {
-            Dao<Note, Long> dao = DaoManager.createDao(cs, Note.class);
-            dao.create(note);
-        } catch (SQLException|IOException ex) {
-            LOG.error("Cannot create note!", ex);
         }
     }
 }
